@@ -144,8 +144,27 @@ class Makkha8_Admin {
         check_admin_referer('makkha8-quarantine');
         $file = $_REQUEST['file'] ?? '';
         $path = base64_decode($file);
+
+        // Prevent path traversal and remote paths
+        if (strpos($path, '..') !== false || strpos($path, './') !== false || strpos($path, '.\\') !== false) {
+            wp_die('Invalid file path', 'Makkha8 Firewall', ['response' => 403]);
+        }
+        if (preg_match('#^[a-zA-Z0-9+.-]+://#', $path)) {
+            wp_die('Remote or protocol paths are not allowed', 'Makkha8 Firewall', ['response' => 403]);
+        }
+
+        $real_path = realpath($path);
+        if ($real_path === false) {
+            wp_die('File not found', 'Makkha8 Firewall', ['response' => 404]);
+        }
+        $normalized_root = rtrim(str_replace('\\', '/', ABSPATH), '/') . '/';
+        $normalized_real = str_replace('\\', '/', $real_path);
+        if (strpos($normalized_real, $normalized_root) !== 0) {
+            wp_die('File path is outside the WordPress root', 'Makkha8 Firewall', ['response' => 403]);
+        }
+
         $scanner = new Makkha8_Scanner(ABSPATH);
-        $scanner->remove($path);
+        $scanner->remove($real_path);
         wp_redirect(add_query_arg('makkha8_msg','removed', admin_url('admin.php?page=makkha8-firewall-scan')));
         exit;
     }
