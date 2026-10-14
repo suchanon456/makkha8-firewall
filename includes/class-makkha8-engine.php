@@ -15,6 +15,7 @@ define('MAKKHA8_REQUEST_ID_LENGTH', 32);
  * Class Makkha8_Request - ปรับปรุงความปลอดภัยและการจัดการ Request
  */
 class Makkha8_Request {
+    const REQUEST_ID_LENGTH = 32;
     public $method;
     public $uri;
     public $path;
@@ -78,7 +79,7 @@ class Makkha8_Request {
     /**
      * Generate Unique Request ID
      */
-    private static function generateRequestId() {
+    public static function generateRequestId() {
         return bin2hex(random_bytes(self::REQUEST_ID_LENGTH / 2));
     }
     
@@ -336,6 +337,30 @@ class Makkha8_FirewallEngine {
         if (!$request) {
             $request = Makkha8_Request::fromGlobals($this->config);
         }
+
+        // Whitelist localhost and plugin activation (แก้หน้าขาว Request blocked + CSRF)
+        $uri = $request->uri ?? '';
+        $full_uri = $_SERVER['REQUEST_URI'] ?? $uri;
+        $action = $_REQUEST['action'] ?? $_GET['action'] ?? $_POST['action'] ?? '';
+        $page = $_REQUEST['page'] ?? $_GET['page'] ?? '';
+        
+        // 1. อนุญาตทุกอย่างที่เป็น Makkha8 ของตัวเอง - เช็คทั้ง uri, action, page
+        if (strpos($uri, 'makkha8') !== false || strpos($full_uri, 'makkha8') !== false || strpos($action, 'makkha8') !== false || strpos($page, 'makkha8') !== false) {
+            return []; // ไม่ block request ของตัวเอง - แก้ CSRF failed
+        }
+        // 2. อนุญาต admin-post.php ที่เป็น action ของ makkha8
+        if (strpos($full_uri, 'admin-post.php') !== false && strpos($full_uri, 'makkha8') !== false) {
+            return [];
+        }
+        if (strpos($full_uri, 'makkha8_run_scan') !== false) {
+            return [];
+        }
+        // 3. อนุญาต localhost สำหรับการ activate และจัดการปลั๊กอิน
+        if (in_array($request->ip, ['::1', '127.0.0.1', 'localhost'], true)) {
+            if (strpos($full_uri, '/wp-admin/') !== false) {
+                return [];
+            }
+        }
         
         // ตั้งค่า Request ID
         $this->request_id = $request->request_id;
@@ -578,7 +603,7 @@ class Makkha8_FirewallEngine {
             $duration
         );
         
-        error_log($log_entry, 3, '/var/log/makkha8_engine.log');
+        error_log($log_entry, 3, __DIR__ . '/../storage/makkha8_engine.log');
     }
     
     /**
@@ -597,7 +622,9 @@ class Makkha8_FirewallEngine {
             $errline
         );
         
-        error_log($log, 3, '/var/log/makkha8_error.log');
+                $logFile = __DIR__ . '/../storage/makkha8_error.log';
+        @mkdir(dirname($logFile), 0755, true);
+        error_log($log, 3, $logFile);
         return true;
     }
     
@@ -614,7 +641,9 @@ class Makkha8_FirewallEngine {
             $e->getTraceAsString()
         );
         
-        error_log($log, 3, '/var/log/makkha8_exception.log');
+                $logFile = __DIR__ . '/../storage/makkha8_exception.log';
+        @mkdir(dirname($logFile), 0755, true);
+        error_log($log, 3, $logFile);
     }
     
     /**
