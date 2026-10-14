@@ -22,7 +22,7 @@ class Makkha8_Samma_Ajiva implements Makkha8_Module_Interface {
     private $trusted_proxies;
 
     public function __construct($storage = null, $limit = self::DEFAULT_LIMIT, $window = self::DEFAULT_WINDOW) {
-        $this->storage = $storage ?? Makkha8_Storage::getInstance();
+        $this->storage = $storage ?? new Makkha8_Storage();
         $this->limit = $limit;
         $this->window = $window;
         
@@ -300,9 +300,11 @@ LUA;
      */
     private function alert_admin($request, $client_ip, $count) {
         $subject = "⚠️ High Rate Limit Exceeded: {$client_ip}";
+        $uri = $request->uri ?? '/';
+        $method = $request->method ?? 'GET';
         $message = "IP: {$client_ip}\n";
-        $message .= "URI: {$request->uri ?? '/'}\n";
-        $message .= "Method: {$request->method ?? 'GET'}\n";
+        $message .= "URI: {$uri}\n";
+        $message .= "Method: {$method}\n";
         $message .= "Count: {$count}/{$this->limit}\n";
         $message .= "Time: " . date('Y-m-d H:i:s');
         

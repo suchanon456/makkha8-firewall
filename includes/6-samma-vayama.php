@@ -36,7 +36,7 @@ class Makkha8_Samma_Vayama implements Makkha8_Module_Interface {
     private $trusted_proxies;
 
     public function __construct($storage = null, $max_attempts = self::DEFAULT_MAX_ATTEMPTS, $window = self::DEFAULT_WINDOW) {
-        $this->storage = $storage ?? Makkha8_Storage::getInstance();
+        $this->storage = $storage ?? new Makkha8_Storage();
         $this->max_attempts = $max_attempts;
         $this->window = $window;
         
@@ -368,7 +368,8 @@ LUA;
         $message = "IP: {$ip}\n";
         $message .= "Username: {$username}\n";
         $message .= "Attempts: {$attempts}\n";
-        $message .= "URI: {$request->uri ?? '/'}\n";
+        $tmp_uri = $request->uri ?? '/';
+        $message .= "URI: {$tmp_uri}\n";
         $message .= "Time: " . date('Y-m-d H:i:s');
         
         // ส่ง Email หรือ Slack Alert
