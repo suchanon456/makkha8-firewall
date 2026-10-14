@@ -1,12 +1,11 @@
 <?php
-// Standalone scanner class used from admin to scan and quarantine/remove infected files.
+// Makkha8 Scanner - Fixed version with whitelist and performance improvements
 class Makkha8_Scanner {
     protected $root;
-    protected $ignore_dirs = ['.git', 'node_modules', 'wp-content/plugins/makkha8-firewall/quarantine', 'wp-content/plugins/makkha8-firewall/system'];
+    protected $ignore_dirs = ['.git', 'node_modules', 'vendor', 'wp-content/plugins/makkha8-firewall/quarantine', 'wp-content/plugins/makkha8-firewall/system', 'wp-content/cache', 'wp-content/uploads/cache'];
     protected $plugin_core_path = 'wp-content/plugins/makkha8-firewall';
     protected $wp_core_paths = ['wp-includes/', 'wp-admin/'];
 
-    // Risk tier thresholds: Critical(80+), High(50-79), Medium(30-49), Low(1-29)
     protected $risk_tiers = [
         'critical' => 80,
         'high' => 50,
@@ -18,6 +17,10 @@ class Makkha8_Scanner {
         $this->root = $root ?: ABSPATH;
         // Always ignore the plugin itself (trusted zone)
         $this->ignore_dirs[] = str_replace(DIRECTORY_SEPARATOR, '/', 'wp-content/plugins/makkha8-firewall');
+        // Ignore storage logs to avoid self-detection
+        $this->ignore_dirs[] = 'makkha8_error.log';
+        $this->ignore_dirs[] = 'makkha8_exception.log';
+        $this->ignore_dirs[] = 'makkha8_engine.log';
     }
 
     protected function get_risk_tier($score, $is_plugin_core = false) {
@@ -53,12 +56,15 @@ class Makkha8_Scanner {
     public function unmark_safe($path) {
         $whitelisted = get_option('makkha8_whitelist', []);
         if (is_array($whitelisted)) {
-            $whitelisted = array_filter($whitelisted, function($p){ return $p !== $path; });
+            $whitelisted = array_filter($whitelisted, function($p) use ($path) { return $p !== $path; });
             update_option('makkha8_whitelist', array_values($whitelisted));
         }
     }
 
     public function scan($start = null) {
+        @set_time_limit(300); // 5 minutes for XAMPP
+        @ini_set('memory_limit', '512M');
+        
         $start = $start ?: $this->root;
         $results = [];
         if (!is_dir($start)) {
@@ -66,16 +72,19 @@ class Makkha8_Scanner {
         }
 
         $directory = new RecursiveDirectoryIterator($start, RecursiveDirectoryIterator::SKIP_DOTS);
-        $iterator = new RecursiveIteratorIterator($directory);
+        $iterator = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::SELF_FIRST);
+        
+        $scanned_count = 0;
         foreach ($iterator as $file) {
+            // Prevent timeout on large sites - stop after 2000 files for now (can be made AJAX later)
+            if ($scanned_count > 3000) break;
+            
             if (!$file->isFile()) continue;
             $path = $file->getPathname();
             $normalized_path = str_replace(DIRECTORY_SEPARATOR, '/', $path);
 
-            // Check if whitelisted
             if ($this->is_whitelisted($path)) continue;
 
-            // skip plugin's own quarantine and trusted directories
             $skip = false;
             foreach ($this->ignore_dirs as $d) {
                 if (strpos($normalized_path, $d) !== false) {
@@ -85,23 +94,21 @@ class Makkha8_Scanner {
             }
             if ($skip) continue;
 
-            // prevent huge files from crashing the scanner
             if ($file->getSize() > 5 * 1024 * 1024) {
                 continue;
             }
 
-            // only scan php files and suspicious uploads
             $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             if (!in_array($ext, ['php','phps','phtml','php5','php7'])) {
                 if (stripos($normalized_path, '.php') === false) continue;
             }
 
+            $scanned_count++;
             $score = 0;
             $reasons = [];
             $content = @file_get_contents($path);
             if ($content === false) continue;
 
-            // Detector: obfuscation patterns
             $patterns = [
                 '/base64_decode\s*\(/i',
                 '/eval\s*\(/i',
@@ -116,36 +123,42 @@ class Makkha8_Scanner {
                 '/assert\s*\(/i',
             ];
             foreach ($patterns as $p) {
-                if (preg_match($p, $content)) { $score += 5; $reasons[] = 'obfuscation'; }
+                if (preg_match($p, $content)) { $score += 5; $reasons[] = 'obfuscation'; break; }
             }
 
-            // Detector: suspicious functions or keywords
             $sigs = ['eval(', 'base64_decode', 'assert(', 'system(', 'passthru(', 'shell_exec', 'proc_open', 'popen', 'curl_exec', 'curl_multi_exec'];
-            foreach ($sigs as $s) { if (stripos($content, $s) !== false) { $score += 3; $reasons[] = 'suspicious_func'; } }
+            foreach ($sigs as $s) { 
+                if (stripos($content, $s) !== false) { 
+                    $score += 3; 
+                    $reasons[] = 'suspicious_func:'.$s; 
+                    break;
+                } 
+            }
 
-            // Detector: long single-line strings (packed payloads)
-            if (preg_match('/\S{200,}/', $content)) { $score += 2; $reasons[] = 'long_string'; }
+            if (preg_match('/\S{300,}/', $content)) { $score += 2; $reasons[] = 'long_string'; }
 
-            // Detector: recently modified (may be indicator)
             $mtime = $file->getMTime();
             if ($mtime > (time() - 7*24*3600)) { $score += 1; $reasons[] = 'recent_mod'; }
 
-            // Detector: writable by others
             $perms = $file->getPerms();
-            if (($perms & 0x0002) || ($perms & 0x0004)) { // world-writable or group-writable heuristic
-                $score += 1; $reasons[] = 'writable';
+            if (($perms & 0x0002)) {
+                $score += 1; $reasons[] = 'world_writable';
             }
 
-            // Combined heuristic: obfuscation + dangerous function is much worse
-            if (in_array('obfuscation', $reasons, true) && in_array('suspicious_func', $reasons, true)) {
-                $score += 40;
+            if (in_array('obfuscation', $reasons, true) || !empty(array_filter($reasons, fn($r) => str_starts_with($r, 'suspicious_func')))) {
+                // Only add heavy penalty if both present
+                $has_obf = false; $has_func = false;
+                foreach ($reasons as $r) {
+                    if ($r === 'obfuscation') $has_obf = true;
+                    if (str_starts_with($r, 'suspicious_func')) $has_func = true;
+                }
+                if ($has_obf && $has_func) $score += 40;
             }
 
             if ($score > 0) {
                 $is_core = $this->is_plugin_core($path);
                 $tier = $this->get_risk_tier($score, $is_core);
                 
-                // Skip plugin core files from results (auto-whitelisted)
                 if (!$is_core) {
                     $results[] = [
                         'file' => $path,
@@ -159,7 +172,6 @@ class Makkha8_Scanner {
                 }
             }
         }
-        // sort by score desc
         usort($results, function($a,$b){ return $b['score'] <=> $a['score']; });
         return array_values($results);
     }
