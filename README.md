@@ -21,23 +21,24 @@ The 8 Modules (Makkha 8) - Click to view code
 7	includes/7-samma-sati.php	Makkha8_Samma_Sati	Right Mindfulness - Logging/anomaly
 8	includes/8-samma-samadhi.php	Makkha8_Samma_Samadhi	Right Concentration - Final block decision
 Admin & System
-admin/class-makkha8-admin.php - WP Admin UI
-system/Firewall/ - Legacy / experimental rules
-storage/ - Logs (auto-created on activation)
-tests/ - PHPUnit tests
+[admin/class-makkha8-admin.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/admin/class-makkha8-admin.php) - WP Admin UI
+[system/Firewall/](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/system/FirewallEngine.php) - Legacy / experimental rules
+[storage/](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/storage/index.php) - Logs (auto-created on activation)
+[tests/](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/tests/run_scanner.php) - PHPUnit tests
 Raw links for AI crawlers (direct file content):
 
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/makkha8-firewall.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/class-makkha8-engine.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/class-makkha8-scanner.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/1-samma-ditthi.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/2-samma-sankappa.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/3-samma-vaca.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/4-samma-kammanta.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/5-samma-ajiva.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/6-samma-vayama.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/7-samma-sati.php
-https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/8-samma-samadhi.php
+[makkha8-firewall.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/makkha8-firewall.php)
+[class-makkha8-engine.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/class-makkha8-engine.php)
+[class-makkha8-scanner.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/class-makkha8-scanner.php)
+[class-makkha8-request.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/class-makkha8-request.php)
+[1-samma-ditthi.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/1-samma-ditthi.php)
+[2-samma-sankappa.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/2-samma-sankappa.php)
+[3-samma-vaca.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/3-samma-vaca.php)
+[4-samma-kammanta.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/4-samma-kammanta.php)
+[5-samma-ajiva.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/5-samma-ajiva.php)
+[6-samma-vayama.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/6-samma-vayama.php)
+[7-samma-sati.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/7-samma-sati.php)
+[8-samma-samadhi.php](https://raw.githubusercontent.com/suchanon456/makkha8-firewall/main/includes/8-samma-samadhi.php)
 
 Architecture
 Request (fromGlobals) -> Engine -> [1..8] Samma Modules -> Result (Allow/Block) -> Admin Log
