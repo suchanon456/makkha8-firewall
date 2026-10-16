@@ -37,6 +37,24 @@ class Makkha8_Samma_Sankappa implements Makkha8_Module_Interface {
         $path = $this->extract_path($uri);
         $method = $this->get_method($request);
         $client_ip = $this->get_client_ip($request);
+		
+		// --- ตรวจโลภะขั้นละเอียด: กักตุนทรัพยากร ---
+		// 1. โลภะแบบกินเนื้อที่ (Content-Length ใหญ่ผิดปกติ)
+		$content_length = $request->headers['content-length'] ?? 0;
+		if ($content_length > 10 * 1024 * 1024) { // 10MB
+			return ['block' => true, 'reason' => 'Lobha: Resource hoarding - Payload too large'];
+		}
+
+		// 2. โลภะแบบกินเวลา (พยายามทำให้ process ค้าง)
+		if (strpos($uri, 'sleep(') !== false || strpos($uri, 'benchmark(') !== false) {
+			return ['block' => true, 'reason' => 'Lobha: Resource hoarding - Time based attack'];
+		}
+
+		// --- ตรวจโทสะขั้นละเอียด: ทำลายทรัพยากร ---
+		// โทสะแบบทำลาย Process อื่น
+		if (stripos($uri, 'rm -rf') !== false || stripos($uri, 'drop table') !== false || stripos($uri, 'shutdown') !== false) {
+			return ['block' => true, 'reason' => 'Dosa: Destructive intent - Trying to destroy resource'];
+		}
 
         // 2. ตรวจสอบ Rate Limiting
         if ($this->is_rate_limited($client_ip)) {
